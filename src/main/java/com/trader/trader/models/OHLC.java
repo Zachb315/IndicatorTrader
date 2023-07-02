@@ -1,9 +1,6 @@
 package com.trader.trader.models;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
@@ -13,6 +10,7 @@ public class OHLC {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
+    @Column(unique = true)
     private LocalDateTime date;
     private double open;
     private double close;
@@ -20,8 +18,7 @@ public class OHLC {
     private double low;
     private double volume;
 
-    public OHLC(long id, LocalDateTime date, double open, double close, double high, double low, double volume) {
-        this.id = id;
+    public OHLC(LocalDateTime date, double open, double close, double high, double low, double volume) {
         this.date = date;
         this.open = open;
         this.close = close;

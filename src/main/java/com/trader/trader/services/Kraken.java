@@ -5,10 +5,17 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.trader.trader.models.Historical;
+import com.trader.trader.models.Logs;
+import com.trader.trader.models.OHLC;
 import com.trader.trader.repository.HistoricalRepository;
+import com.trader.trader.repository.LogsRepository;
 import com.trader.trader.repository.OHLCRepository;
+import org.hibernate.engine.jdbc.spi.SqlExceptionHelper;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -32,13 +39,20 @@ public class Kraken {
     public Gson gson;
     private final HistoricalRepository historicalRepository;
     private final OHLCRepository ohlcRepository;
-    private boolean enabled=true;
+    private final LogsRepository logsRepository;
+    private boolean isTradesEnabled=true;
+    private boolean isOHLCEnabled=true;
     public String timestamp="1616663618";
+    @Value("$[api.key]")
+    private String apiKey;
+    @Value("$[api.secret]")
+    private String apiSecret;
 
     @Autowired
-    public Kraken(HistoricalRepository historicalRepository, OHLCRepository ohlcRepository) {
+    public Kraken(HistoricalRepository historicalRepository, OHLCRepository ohlcRepository, LogsRepository logsRepository) {
         this.historicalRepository = historicalRepository;
         this.ohlcRepository = ohlcRepository;
+        this.logsRepository = logsRepository;
         httpClient=HttpClient.newHttpClient();
         gson=new Gson();
     }
@@ -64,7 +78,10 @@ public class Kraken {
         HttpResponse<String> resp = getHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString());
         if (!gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject().get("error").getAsJsonArray().isEmpty()) {
             System.out.println("ERROR SHUTTING DOWN");
-            enabled=false;
+            Logs log = new Logs(gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject().get("error").getAsString()
+                    , LocalDateTime.now());
+            logsRepository.save(log);
+            isOHLCEnabled=false;
             return;
         }
         writeOHLCToDB(gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject());
@@ -82,7 +99,10 @@ public class Kraken {
         HttpResponse<String> resp = getHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString());
         if (!gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject().get("error").getAsJsonArray().isEmpty()) {
             System.out.println("ERROR SHUTTING DOWN");
-            enabled=false;
+            Logs log = new Logs(gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject().get("error").getAsString()
+                    , LocalDateTime.now());
+            logsRepository.save(log);
+            isTradesEnabled=false;
             return "N/A";
         }
         System.out.println(resp.statusCode());
@@ -113,15 +133,19 @@ public class Kraken {
             }
         }
         catch (Exception e) {
+            Logs log = new Logs(e.getMessage(), LocalDateTime.now());
+            logsRepository.save(log);
             e.getStackTrace();
             System.out.println(e.getMessage());
-            setEnabled(false);
+            setTradesEnabled(false);
         }
 
     }
 
     public void writeOHLCToDB(JsonObject resp) {
         JsonArray arr = resp.get("result").getAsJsonObject().get("XXBTZUSD").getAsJsonArray();
+        int added=0;
+        long start = System.currentTimeMillis();
         try {
             for (int i=0; i<arr.size(); i++) {
 
@@ -129,42 +153,54 @@ public class Kraken {
                 JsonArray processed = new JsonArray();
 
                 Long timestamp = Long.parseLong(curr.get(0).getAsString());
-                Date date = new Date(timestamp*1000L);
+                Date timeStampToTime = new Date(timestamp*1000L);
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                String format = sdf.format(date);
+                String format = sdf.format(timeStampToTime);
+                Date date = sdf.parse(format);
+                LocalDateTime ldt = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+
 
                 processed.add(format);
                 for (int j=1; j<curr.size(); j++) processed.add(curr.get(j).getAsString());
-                String table = "Data";
-                String sql = "INSERT INTO \""+table+"\" (time, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?)";
-//                PreparedStatement stmnt = connection.prepareStatement(sql);
-//                stmnt.setString(1, processed.get(0).getAsString());
-//                stmnt.setString(2, processed.get(1).getAsString());
-//                stmnt.setString(3, processed.get(2).getAsString());
-//                stmnt.setString(4, processed.get(3).getAsString());
-//                stmnt.setString(5, processed.get(4).getAsString());
-//                stmnt.setString(6, processed.get(6).getAsString());
-//                System.out.println(stmnt.toString());
-//                stmnt.executeUpdate();
-//                stmnt.close();
+                OHLC ohlc = new OHLC(ldt, curr.get(1).getAsDouble(), curr.get(2).getAsDouble(), curr.get(3).getAsDouble(), curr.get(4).getAsDouble(), curr.get(5).getAsDouble());
+                if (!ohlcRepository.existsByDate(ldt)) {
+                    ohlcRepository.save(ohlc);
+                    added++;
+                }
 
             }
         }
         catch (Exception e) {
+            Logs log = new Logs(e.getMessage(), LocalDateTime.now());
+            logsRepository.save(log);
             e.getStackTrace();
+            System.out.println(e.getMessage());
+            setOHLCEnabled(false);
         }
+        System.out.println("TOTAL NEW RECORDS: "+added);
+        long end = System.currentTimeMillis();
+        System.out.println("Time: "+(end-start));
 
     }
-    @Scheduled(fixedDelay = 1300)
+
     public void storeTrades() throws URISyntaxException, IOException, InterruptedException {
-        if (isEnabled()) {
+        if (isTradesEnabled()) {
             String pair="XBTUSD";
 
             timestamp=getTradesHistory(pair, timestamp);
             System.out.println("LAST: "+timestamp);
         }
+    }
 
+    @Scheduled(fixedDelay=60000)
+    public void storeOHLC() throws URISyntaxException, IOException, InterruptedException {
+        if (isOHLCEnabled()) {
+            String pair="XBTUSD";
+            String interval="1";
+            getOHLCData(pair,interval);
+            System.out.println("Enabled: "+isOHLCEnabled());
 
+        }
     }
 
 
@@ -176,11 +212,19 @@ public class Kraken {
         return domain;
     }
 
-    public boolean isEnabled() {
-        return enabled;
+    public boolean isTradesEnabled() {
+        return isTradesEnabled;
     }
 
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
+    public void setTradesEnabled(boolean isTradesEnabled) {
+        this.isTradesEnabled = isTradesEnabled;
+    }
+
+    public boolean isOHLCEnabled() {
+        return isOHLCEnabled;
+    }
+
+    public void setOHLCEnabled(boolean OHLCEnabled) {
+        isOHLCEnabled = OHLCEnabled;
     }
 }
