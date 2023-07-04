@@ -34,14 +34,14 @@ public class MACD {
     }
 
     public static List<Double> signalLine(List<Double> macd, int period) {
-        List<Double> signalLine = new ArrayList<>();
-
-        for (int i=period; i<macd.size(); i++) {
-            double sum=0.0;
-            for (int j=i-period; j<=i; j++) sum+=macd.get(j);
-            signalLine.add(sum/period);
-        }
-        return signalLine;
+//        List<Double> signalLine = new ArrayList<>();
+//
+//        for (int i=period; i<macd.size(); i++) {
+//            double sum=0.0;
+//            for (int j=i-period+1; j<=i; j++) sum+=macd.get(j);
+//            signalLine.add(sum/period);
+//        }
+        return getEMA(macd, period);
 
     }
 }

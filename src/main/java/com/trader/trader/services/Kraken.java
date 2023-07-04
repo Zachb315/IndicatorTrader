@@ -159,13 +159,9 @@ public class Kraken {
         long start = System.currentTimeMillis();
         List<OHLC> addedOHLC = new ArrayList<>();
         try {
-            for (int i=0; i<arr.size(); i++) {
+            for (int i=0; i<arr.size()-1; i++) {
 
                 JsonArray curr = arr.get(i).getAsJsonArray();
-//                if (curr.get(6).getAsDouble()==0) {
-//                    System.out.println("Zero Volume, retrying");
-//                    break;
-//                }
                 Long timestamp = Long.parseLong(curr.get(0).getAsString());
                 Date timeStampToTime = new Date(timestamp*1000L);
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -207,30 +203,19 @@ public class Kraken {
         }
     }
 
-    @Scheduled(fixedDelay=60000)
+    @Scheduled(fixedDelay = 10000)
     public void storeOHLC() throws URISyntaxException, IOException, InterruptedException {
         if (isOHLCEnabled()) {
             String pair="XBTUSD";
             String interval="1";
             List<OHLC> data = getOHLCData(pair,interval);
             List<Double> allPrices = ohlcRepository.findAllOrderById();
-            LocalDateTime lastOHLCDate = ohlcRepository.findOldestDate();
-
-//            System.out.println(lastOHLCDate);
-//            List<Double> historicalPrices = historicalRepository.findAllOrderByDate(lastOHLCDate);
-//            for (Double d : historicalPrices) allPrices.add(d);
             Collections.reverse(allPrices);
-            List<Double> macd = new ArrayList<>();
-            List<Double> signal = new ArrayList<>();
             System.out.println("LAST PRICE: "+allPrices.get(allPrices.size()-1));
-            List<Double> temp = MACD.macdLine(allPrices, 12, 26);
-            Collections.reverse(temp);
-            for (int i=0; i<temp.size(); i++) macd.add(temp.get(i));
-            System.out.println("MACD: "+temp.get(0));
-            temp = MACD.signalLine(macd, 18);
-            Collections.reverse(temp);
-            for (int i=0; i<temp.size(); i++) signal.add(temp.get(i));
-            System.out.println("SIGNAL: "+temp.get(0));
+            List<Double> macd = MACD.macdLine(allPrices, 12, 26);
+            System.out.println("MACD: "+macd.get(macd.size()-1)+" "+macd.get(macd.size()-2));
+            List<Double> signal = MACD.signalLine(macd, 9);
+            System.out.println("SIGNAL: "+signal.get(signal.size()-1)+" "+signal.get(signal.size()-2));
 
 
 
