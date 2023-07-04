@@ -14,11 +14,14 @@ public interface OHLCRepository extends JpaRepository<OHLC, Long> {
     @Query("SELECT COUNT(o) > 0 FROM OHLC o WHERE o.date = :date")
     boolean existsByDate(@Param("date") LocalDateTime date);
 
-    @Query("SELECT o.close FROM OHLC o ORDER BY o.date DESC LIMIT :period")
+    @Query("SELECT o.close FROM OHLC o ORDER BY o.id LIMIT :period")
     List<Double> findAllOrderByDate(@Param("period") int longPeriod);
 
     @Query("SELECT o.date FROM OHLC o ORDER BY o.date ASC LIMIT 1")
     LocalDateTime findOldestDate();
+
+    @Query("SELECT o.close FROM OHLC o ORDER BY o.id DESC")
+    List<Double> findAllOrderById();
 
 
 }

@@ -45,7 +45,7 @@ public class Kraken {
     private final LogsRepository logsRepository;
     private boolean isTradesEnabled=true;
     private boolean isOHLCEnabled=true;
-    public String timestamp="1657445794587029093";
+    public String timestamp="1682625671396801743";
     public boolean calculated=false;
     @Value("$[api.key]")
     private String apiKey;
@@ -162,10 +162,10 @@ public class Kraken {
             for (int i=0; i<arr.size(); i++) {
 
                 JsonArray curr = arr.get(i).getAsJsonArray();
-                if (curr.get(6).getAsDouble()==0) {
-                    System.out.println("Zero Volume, retrying");
-                    break;
-                }
+//                if (curr.get(6).getAsDouble()==0) {
+//                    System.out.println("Zero Volume, retrying");
+//                    break;
+//                }
                 Long timestamp = Long.parseLong(curr.get(0).getAsString());
                 Date timeStampToTime = new Date(timestamp*1000L);
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -197,7 +197,7 @@ public class Kraken {
 
     }
 
-    @Scheduled(fixedDelay=1250)
+//    @Scheduled(fixedDelay=1250)
     public void storeTrades() throws URISyntaxException, IOException, InterruptedException {
         if (isTradesEnabled()) {
             String pair="XBTUSD";
@@ -207,26 +207,30 @@ public class Kraken {
         }
     }
 
-//    @Scheduled(fixedDelay=60000)
+    @Scheduled(fixedDelay=60000)
     public void storeOHLC() throws URISyntaxException, IOException, InterruptedException {
         if (isOHLCEnabled()) {
             String pair="XBTUSD";
             String interval="1";
             List<OHLC> data = getOHLCData(pair,interval);
-            List<Double> allPrices = ohlcRepository.findAllOrderByDate(720);
+            List<Double> allPrices = ohlcRepository.findAllOrderById();
             LocalDateTime lastOHLCDate = ohlcRepository.findOldestDate();
-            List<Double> historicalPrices = historicalRepository.findAllOrderByDate(lastOHLCDate);
-            for (Double d : historicalPrices) allPrices.add(d);
-            System.out.println(allPrices.size());
+
+//            System.out.println(lastOHLCDate);
+//            List<Double> historicalPrices = historicalRepository.findAllOrderByDate(lastOHLCDate);
+//            for (Double d : historicalPrices) allPrices.add(d);
+            Collections.reverse(allPrices);
             List<Double> macd = new ArrayList<>();
             List<Double> signal = new ArrayList<>();
-
+            System.out.println("LAST PRICE: "+allPrices.get(allPrices.size()-1));
             List<Double> temp = MACD.macdLine(allPrices, 12, 26);
+            Collections.reverse(temp);
             for (int i=0; i<temp.size(); i++) macd.add(temp.get(i));
-//            System.out.println("MACD: "+temp);
+            System.out.println("MACD: "+temp.get(0));
             temp = MACD.signalLine(macd, 18);
+            Collections.reverse(temp);
             for (int i=0; i<temp.size(); i++) signal.add(temp.get(i));
-//            System.out.println("SIGNAL: "+temp);
+            System.out.println("SIGNAL: "+temp.get(0));
 
 
 

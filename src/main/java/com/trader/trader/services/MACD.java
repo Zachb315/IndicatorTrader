@@ -21,13 +21,9 @@ public class MACD {
 
     public static List<Double> getEMA(List<Double> prices, int period) {
         List<Double> ema = new ArrayList<>();
-        double sum=0.0;
-        for (int i=0; i<period; i++) {
-            sum+=prices.get(i);
-        }
-        double sma = sum/period;
+
         double sm = 2.0/(period+1);
-        ema.add(sma);
+        ema.add(prices.get(0));
 
         for (int i=1; i<prices.size(); i++) {
             double curr = prices.get(i);
