@@ -35,6 +35,7 @@ public class Kraken {
     private final LogsRepository logsRepository;
     private final MacdRepository macdRepository;
     private final SignalRepository signalRepository;
+    private final OrderLogRepository orderLogRepository;
     private boolean isTradesEnabled=true;
     private boolean isOHLCEnabled=true;
     public String timestamp="1682625671396801743";
@@ -46,12 +47,14 @@ public class Kraken {
 
     @Autowired
     public Kraken(HistoricalRepository historicalRepository, OHLCRepository ohlcRepository,
-                  LogsRepository logsRepository, MacdRepository macdRepository, SignalRepository signalRepository) {
+                  LogsRepository logsRepository, MacdRepository macdRepository,
+                  SignalRepository signalRepository, OrderLogRepository orderLogRepository) {
         this.historicalRepository = historicalRepository;
         this.ohlcRepository = ohlcRepository;
         this.logsRepository = logsRepository;
         this.macdRepository = macdRepository;
         this.signalRepository = signalRepository;
+        this.orderLogRepository = orderLogRepository;
         httpClient=HttpClient.newHttpClient();
         gson=new Gson();
     }
@@ -151,7 +154,6 @@ public class Kraken {
 
     public List<OHLC> writeOHLCToDB(JsonObject resp) {
         JsonArray arr = resp.get("result").getAsJsonObject().get("XXBTZUSD").getAsJsonArray();
-        long start = System.currentTimeMillis();
         List<OHLC> addedOHLC = new ArrayList<>();
         try {
             for (int i=0; i<arr.size()-1; i++) {
@@ -182,8 +184,6 @@ public class Kraken {
             setOHLCEnabled(false);
         }
         System.out.println("TOTAL NEW RECORDS: "+addedOHLC.size());
-        long end = System.currentTimeMillis();
-        System.out.println("Time: "+(end-start));
         return addedOHLC;
 
     }
@@ -201,19 +201,46 @@ public class Kraken {
     @Scheduled(fixedDelay = 10000)
     public void storeOHLC() throws URISyntaxException, IOException, InterruptedException {
         if (isOHLCEnabled()) {
+            long start = System.currentTimeMillis();
             String pair="XBTUSD";
             String interval="1";
             List<OHLC> data = getOHLCData(pair,interval);
             List<Double> allPrices = ohlcRepository.findAllOrderById();
             Collections.reverse(allPrices);
-            System.out.println("LAST PRICE: "+allPrices.get(allPrices.size()-1));
+            Double lastPrice=allPrices.get(allPrices.size()-1);
+            System.out.println("LAST PRICE: "+lastPrice);
             List<Double> macd = MACD.macdLine(allPrices, 12, 26);
             System.out.println("MACD: "+macd.get(macd.size()-1)+" "+macd.get(macd.size()-2));
             List<Double> signal = MACD.signalLine(macd, 9);
             System.out.println("SIGNAL: "+signal.get(signal.size()-1)+" "+signal.get(signal.size()-2));
             LocalDateTime currentDate = LocalDateTime.now();
-            macdRepository.save(new MacdData(macd.get(macd.size()-1), currentDate));
-            signalRepository.save(new SignalData(signal.get(signal.size()-1), currentDate));
+            if (data.size()==1) {
+                macdRepository.save(new MacdData(macd.get(macd.size()-1), currentDate));
+                signalRepository.save(new SignalData(signal.get(signal.size()-1), currentDate));
+            }
+            Double currentMacd = macd.get(macd.size()-1);
+            Double currentSignal = signal.get(signal.size()-1);
+            Double prevMacd = macd.get(macd.size()-2);
+            Double prevSignal = signal.get(signal.size()-2);
+
+            if (currentMacd<0 && currentSignal<0) {
+                if (currentMacd>currentSignal && prevMacd<prevSignal) {
+                    System.out.println("BOUGHT LONG");
+                    OrderLog orderLog = new OrderLog(lastPrice, 1.0, LocalDateTime.now(), 'b', true, lastPrice-.5, lastPrice+.5);
+                    orderLogRepository.save(orderLog);
+                }
+            }
+            else if (currentMacd>0 && currentSignal>0) {
+                if (currentMacd<currentSignal && prevMacd>prevSignal) {
+                    System.out.println("SOLD SHORT");
+                    OrderLog orderLog = new OrderLog(allPrices.get(allPrices.size()-1), 1.0, LocalDateTime.now(), 's', true, lastPrice+.5, lastPrice-.5);
+                    orderLogRepository.save(orderLog);
+                }
+            }
+            long end = System.currentTimeMillis();
+            System.out.println("TIME(ms): "+(end-start));
+            System.out.println("________________________________________________________");
+
 
 
 

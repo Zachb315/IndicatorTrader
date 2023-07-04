@@ -14,6 +14,7 @@ public class MacdData {
     private Long id;
     private Double value;
     private LocalDateTime date;
+    private String identifier;
 
     public MacdData(Double value, LocalDateTime date) {
         this.value = value;
