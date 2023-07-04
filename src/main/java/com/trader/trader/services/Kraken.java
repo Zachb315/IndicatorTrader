@@ -4,18 +4,10 @@ package com.trader.trader.services;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.trader.trader.models.Historical;
-import com.trader.trader.models.Logs;
-import com.trader.trader.models.OHLC;
-import com.trader.trader.repository.HistoricalRepository;
-import com.trader.trader.repository.LogsRepository;
-import com.trader.trader.repository.OHLCRepository;
-import org.hibernate.engine.jdbc.spi.SqlExceptionHelper;
-import org.hibernate.exception.ConstraintViolationException;
+import com.trader.trader.models.*;
+import com.trader.trader.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -25,8 +17,6 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -43,6 +33,8 @@ public class Kraken {
     private final HistoricalRepository historicalRepository;
     private final OHLCRepository ohlcRepository;
     private final LogsRepository logsRepository;
+    private final MacdRepository macdRepository;
+    private final SignalRepository signalRepository;
     private boolean isTradesEnabled=true;
     private boolean isOHLCEnabled=true;
     public String timestamp="1682625671396801743";
@@ -53,10 +45,13 @@ public class Kraken {
     private String apiSecret;
 
     @Autowired
-    public Kraken(HistoricalRepository historicalRepository, OHLCRepository ohlcRepository, LogsRepository logsRepository) {
+    public Kraken(HistoricalRepository historicalRepository, OHLCRepository ohlcRepository,
+                  LogsRepository logsRepository, MacdRepository macdRepository, SignalRepository signalRepository) {
         this.historicalRepository = historicalRepository;
         this.ohlcRepository = ohlcRepository;
         this.logsRepository = logsRepository;
+        this.macdRepository = macdRepository;
+        this.signalRepository = signalRepository;
         httpClient=HttpClient.newHttpClient();
         gson=new Gson();
     }
@@ -216,7 +211,9 @@ public class Kraken {
             System.out.println("MACD: "+macd.get(macd.size()-1)+" "+macd.get(macd.size()-2));
             List<Double> signal = MACD.signalLine(macd, 9);
             System.out.println("SIGNAL: "+signal.get(signal.size()-1)+" "+signal.get(signal.size()-2));
-
+            LocalDateTime currentDate = LocalDateTime.now();
+            macdRepository.save(new MacdData(macd.get(macd.size()-1), currentDate));
+            signalRepository.save(new SignalData(signal.get(signal.size()-1), currentDate));
 
 
 
