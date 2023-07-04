@@ -30,7 +30,10 @@ import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class Kraken {
@@ -42,7 +45,8 @@ public class Kraken {
     private final LogsRepository logsRepository;
     private boolean isTradesEnabled=true;
     private boolean isOHLCEnabled=true;
-    public String timestamp="1616663618";
+    public String timestamp="1657445794587029093";
+    public boolean calculated=false;
     @Value("$[api.key]")
     private String apiKey;
     @Value("$[api.secret]")
@@ -68,7 +72,7 @@ public class Kraken {
         writeOHLCToDB(gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject());
     }
 
-    public void getOHLCData(String pair, String interval) throws URISyntaxException, IOException, InterruptedException {
+    public List<OHLC> getOHLCData(String pair, String interval) throws URISyntaxException, IOException, InterruptedException {
         String url=getDomain()+"/0/public/OHLC"+"?pair="+pair+"&interval="+interval;
         HttpRequest httpRequest = HttpRequest.newBuilder().uri(
                         new URI(url))
@@ -82,9 +86,9 @@ public class Kraken {
                     , LocalDateTime.now());
             logsRepository.save(log);
             isOHLCEnabled=false;
-            return;
+            return new ArrayList<>();
         }
-        writeOHLCToDB(gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject());
+        return writeOHLCToDB(gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject());
 
     }
 
@@ -114,9 +118,14 @@ public class Kraken {
     }
 
     public void writeTradesToDB(JsonObject resp) {
-
+        int count=0;
         JsonArray arr = resp.get("result").getAsJsonObject().get("XXBTZUSD").getAsJsonArray();
         String last = resp.get("result").getAsJsonObject().get("last").getAsString();
+        if (last.equals(timestamp)) {
+            System.out.println("Completed");
+            setTradesEnabled(false);
+            return;
+        }
         try {
             for (int i=0; i<arr.size(); i++) {
                 JsonArray curr = arr.get(i).getAsJsonArray();
@@ -126,10 +135,12 @@ public class Kraken {
                 String format = sdf.format(timestampToTime);
                 Date date = sdf.parse(format);
                 LocalDateTime localDateTime = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-
-                Historical data = new Historical(curr.get(1).getAsDouble(), localDateTime, timestamp.toString(),
-                        last, curr.get(3).getAsString().charAt(0));
-                historicalRepository.save(data);
+                if (!historicalRepository.existsByDate(localDateTime.withSecond(0))) {
+                    Historical data = new Historical(curr.get(1).getAsDouble(), localDateTime.withSecond(0), curr.get(0).getAsDouble(), timestamp.toString(),
+                            last, curr.get(3).getAsString().charAt(0));
+                    historicalRepository.save(data);
+                    count++;
+                }
             }
         }
         catch (Exception e) {
@@ -139,19 +150,22 @@ public class Kraken {
             System.out.println(e.getMessage());
             setTradesEnabled(false);
         }
+        System.out.println("Rows Added: "+count);
 
     }
 
-    public void writeOHLCToDB(JsonObject resp) {
+    public List<OHLC> writeOHLCToDB(JsonObject resp) {
         JsonArray arr = resp.get("result").getAsJsonObject().get("XXBTZUSD").getAsJsonArray();
-        int added=0;
         long start = System.currentTimeMillis();
+        List<OHLC> addedOHLC = new ArrayList<>();
         try {
             for (int i=0; i<arr.size(); i++) {
 
                 JsonArray curr = arr.get(i).getAsJsonArray();
-                JsonArray processed = new JsonArray();
-
+                if (curr.get(6).getAsDouble()==0) {
+                    System.out.println("Zero Volume, retrying");
+                    break;
+                }
                 Long timestamp = Long.parseLong(curr.get(0).getAsString());
                 Date timeStampToTime = new Date(timestamp*1000L);
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -160,12 +174,11 @@ public class Kraken {
                 LocalDateTime ldt = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 
 
-                processed.add(format);
-                for (int j=1; j<curr.size(); j++) processed.add(curr.get(j).getAsString());
-                OHLC ohlc = new OHLC(ldt, curr.get(1).getAsDouble(), curr.get(2).getAsDouble(), curr.get(3).getAsDouble(), curr.get(4).getAsDouble(), curr.get(5).getAsDouble());
+
+                OHLC ohlc = new OHLC(ldt, curr.get(1).getAsDouble(), curr.get(4).getAsDouble(), curr.get(2).getAsDouble(), curr.get(3).getAsDouble(), curr.get(6).getAsDouble());
                 if (!ohlcRepository.existsByDate(ldt)) {
                     ohlcRepository.save(ohlc);
-                    added++;
+                    addedOHLC.add(ohlc);
                 }
 
             }
@@ -177,12 +190,14 @@ public class Kraken {
             System.out.println(e.getMessage());
             setOHLCEnabled(false);
         }
-        System.out.println("TOTAL NEW RECORDS: "+added);
+        System.out.println("TOTAL NEW RECORDS: "+addedOHLC.size());
         long end = System.currentTimeMillis();
         System.out.println("Time: "+(end-start));
+        return addedOHLC;
 
     }
 
+    @Scheduled(fixedDelay=1250)
     public void storeTrades() throws URISyntaxException, IOException, InterruptedException {
         if (isTradesEnabled()) {
             String pair="XBTUSD";
@@ -192,13 +207,30 @@ public class Kraken {
         }
     }
 
-    @Scheduled(fixedDelay=60000)
+//    @Scheduled(fixedDelay=60000)
     public void storeOHLC() throws URISyntaxException, IOException, InterruptedException {
         if (isOHLCEnabled()) {
             String pair="XBTUSD";
             String interval="1";
-            getOHLCData(pair,interval);
-            System.out.println("Enabled: "+isOHLCEnabled());
+            List<OHLC> data = getOHLCData(pair,interval);
+            List<Double> allPrices = ohlcRepository.findAllOrderByDate(720);
+            LocalDateTime lastOHLCDate = ohlcRepository.findOldestDate();
+            List<Double> historicalPrices = historicalRepository.findAllOrderByDate(lastOHLCDate);
+            for (Double d : historicalPrices) allPrices.add(d);
+            System.out.println(allPrices.size());
+            List<Double> macd = new ArrayList<>();
+            List<Double> signal = new ArrayList<>();
+
+            List<Double> temp = MACD.macdLine(allPrices, 12, 26);
+            for (int i=0; i<temp.size(); i++) macd.add(temp.get(i));
+//            System.out.println("MACD: "+temp);
+            temp = MACD.signalLine(macd, 18);
+            for (int i=0; i<temp.size(); i++) signal.add(temp.get(i));
+//            System.out.println("SIGNAL: "+temp);
+
+
+
+
 
         }
     }

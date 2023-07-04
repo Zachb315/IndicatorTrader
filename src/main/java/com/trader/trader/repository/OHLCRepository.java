@@ -7,9 +7,18 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Repository
 public interface OHLCRepository extends JpaRepository<OHLC, Long> {
-@Query("SELECT COUNT(o) > 0 FROM OHLC o WHERE o.date = :date")
+    @Query("SELECT COUNT(o) > 0 FROM OHLC o WHERE o.date = :date")
     boolean existsByDate(@Param("date") LocalDateTime date);
+
+    @Query("SELECT o.close FROM OHLC o ORDER BY o.date DESC LIMIT :period")
+    List<Double> findAllOrderByDate(@Param("period") int longPeriod);
+
+    @Query("SELECT o.date FROM OHLC o ORDER BY o.date ASC LIMIT 1")
+    LocalDateTime findOldestDate();
+
+
 }

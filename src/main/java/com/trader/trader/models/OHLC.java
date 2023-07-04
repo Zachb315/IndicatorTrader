@@ -13,9 +13,9 @@ public class OHLC {
     @Column(unique = true)
     private LocalDateTime date;
     private double open;
-    private double close;
     private double high;
     private double low;
+    private double close;
     private double volume;
 
     public OHLC(LocalDateTime date, double open, double close, double high, double low, double volume) {
