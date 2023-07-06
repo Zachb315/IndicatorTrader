@@ -1,32 +1,29 @@
 package com.trader.trader.models;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
-@Entity
+@Document(collation = "logs")
 public class Logs {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
+    private String id;
     private String message;
-    private LocalDateTime date;
+    private Instant date;
 
-    public Logs(String message, LocalDateTime date) {
+    public Logs(String message, Instant date) {
         this.message = message;
         this.date = date;
     }
 
     public Logs() {}
 
-    public long getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -38,11 +35,11 @@ public class Logs {
         this.message = message;
     }
 
-    public LocalDateTime getDate() {
+    public Instant getDate() {
         return date;
     }
 
-    public void setDate(LocalDateTime date) {
+    public void setDate(Instant date) {
         this.date = date;
     }
 }

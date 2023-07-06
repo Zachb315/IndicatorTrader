@@ -1,31 +1,28 @@
 package com.trader.trader.models;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
-@Entity
+@Document(collection="macd_data")
 public class MacdData {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
     private Double value;
-    private LocalDateTime date;
+    private Instant date;
     private String identifier;
 
-    public MacdData(Double value, LocalDateTime date) {
+    public MacdData(Double value, Instant date) {
         this.value = value;
         this.date = date;
     }
 
-    public Long getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -37,11 +34,11 @@ public class MacdData {
         this.value = value;
     }
 
-    public LocalDateTime getDate() {
+    public Instant getDate() {
         return date;
     }
 
-    public void setDate(LocalDateTime date) {
+    public void setDate(Instant date) {
         this.date = date;
     }
 }

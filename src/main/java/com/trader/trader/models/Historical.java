@@ -1,24 +1,23 @@
 package com.trader.trader.models;
 
-import jakarta.persistence.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
-@Entity
+@Document(collection="historical")
 public class Historical {
 
     @Id
-    @GeneratedValue(strategy= GenerationType.IDENTITY)
-    private long id;
+    private String id;
     private double volume;
-    @Column(unique = true)
-    private LocalDateTime date;
+    private Instant date;
     private double price;
     private String rawTime;
     private String last;
     private char buyOrSell;
 
-    public Historical(double volume, LocalDateTime date, double price, String rawTime, String last, char buyOrSell) {
+    public Historical(double volume, Instant date, double price, String rawTime, String last, char buyOrSell) {
         this.volume = volume;
         this.price=price;
         this.date = date;
@@ -29,11 +28,11 @@ public class Historical {
 
     public Historical() {}
 
-    public long getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -45,11 +44,11 @@ public class Historical {
         this.volume = volume;
     }
 
-    public LocalDateTime getDate() {
+    public Instant getDate() {
         return date;
     }
 
-    public void setDate(LocalDateTime date) {
+    public void setDate(Instant date) {
         this.date = date;
     }
 

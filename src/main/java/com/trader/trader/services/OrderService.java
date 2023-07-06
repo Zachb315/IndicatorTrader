@@ -3,6 +3,7 @@ package com.trader.trader.services;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.trader.trader.models.OHLC;
 import com.trader.trader.models.OrderLog;
 import com.trader.trader.repository.OrderLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,8 +42,9 @@ public class OrderService {
 
     @Scheduled(fixedDelay=1500)
     public void checkOpenTrades() throws IOException, InterruptedException, URISyntaxException {
-        List<OrderLog> findTrades = orderLogRepository.findAll();
-        if (findTrades.size()>0) {
+        Integer activeTrades=orderLogRepository.countByOpenOrClosed(true);
+        double takeProfit = 0.01;
+        if (activeTrades!=null && activeTrades>0) {
             String url = domain+"/0/public/Ticker?pair=XBTUSD";
             HttpRequest httpRequest = HttpRequest.newBuilder().uri(new URI(url))
                     .headers("User-Agent", "Kraken API Java Client")
@@ -54,6 +56,12 @@ public class OrderService {
             Double ask = json.get("a").getAsJsonArray().get(0).getAsDouble();
             Double bid = json.get("b").getAsJsonArray().get(0).getAsDouble();
             System.out.println("ASK: "+ask+" "+"BID: "+bid);
+            OrderLog curr = orderLogRepository.findTopByOrderByIdDesc();
+            if (Math.abs((bid-curr.getPrice())/curr.getPrice()) > takeProfit) {
+                System.out.println("SOLD ORDER: ");
+                curr.setOpenOrClosed(false);
+                orderLogRepository.save(curr);
+            }
         }
 
     }

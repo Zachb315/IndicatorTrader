@@ -1,24 +1,23 @@
 package com.trader.trader.models;
 
-import jakarta.persistence.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
-@Entity
+@Document(collection = "ohlc")
 public class OHLC {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
-    @Column(unique = true)
-    private LocalDateTime date;
+    private String id;
+    private Instant date;
     private double open;
     private double high;
     private double low;
     private double close;
     private double volume;
 
-    public OHLC(LocalDateTime date, double open, double close, double high, double low, double volume) {
+    public OHLC(Instant date, double open, double close, double high, double low, double volume) {
         this.date = date;
         this.open = open;
         this.close = close;
@@ -27,21 +26,25 @@ public class OHLC {
         this.volume = volume;
     }
 
+    public OHLC(double close) {
+        this.close = close;
+    }
+
     public OHLC() {}
 
-    public long getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
-    public LocalDateTime getDate() {
+    public Instant getDate() {
         return date;
     }
 
-    public void setDate(LocalDateTime date) {
+    public void setDate(Instant date) {
         this.date = date;
     }
 

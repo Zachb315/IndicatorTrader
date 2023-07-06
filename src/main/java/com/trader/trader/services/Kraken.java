@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.trader.trader.models.*;
 import com.trader.trader.repository.*;
+import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,8 +19,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -81,7 +84,7 @@ public class Kraken {
         if (!gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject().get("error").getAsJsonArray().isEmpty()) {
             System.out.println("ERROR SHUTTING DOWN");
             Logs log = new Logs(gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject().get("error").getAsString()
-                    , LocalDateTime.now());
+                    , Instant.now());
             logsRepository.save(log);
             isOHLCEnabled=false;
             return new ArrayList<>();
@@ -102,7 +105,7 @@ public class Kraken {
         if (!gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject().get("error").getAsJsonArray().isEmpty()) {
             System.out.println("ERROR SHUTTING DOWN");
             Logs log = new Logs(gson.fromJson(resp.body(), JsonObject.class).getAsJsonObject().get("error").getAsString()
-                    , LocalDateTime.now());
+                    , Instant.now());
             logsRepository.save(log);
             isTradesEnabled=false;
             return "N/A";
@@ -133,8 +136,9 @@ public class Kraken {
                 String format = sdf.format(timestampToTime);
                 Date date = sdf.parse(format);
                 LocalDateTime localDateTime = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-                if (!historicalRepository.existsByDate(localDateTime.withSecond(0))) {
-                    Historical data = new Historical(curr.get(1).getAsDouble(), localDateTime.withSecond(0), curr.get(0).getAsDouble(), timestamp.toString(),
+                if (!historicalRepository.existsByDate(localDateTime.withSecond(0).toInstant(ZoneOffset.UTC))) {
+                    Historical data = new Historical(curr.get(1).getAsDouble(), localDateTime.withSecond(0).toInstant(ZoneOffset.UTC),
+                            curr.get(0).getAsDouble(), timestamp.toString(),
                             last, curr.get(3).getAsString().charAt(0));
                     historicalRepository.save(data);
                     count++;
@@ -142,7 +146,7 @@ public class Kraken {
             }
         }
         catch (Exception e) {
-            Logs log = new Logs(e.getMessage(), LocalDateTime.now());
+            Logs log = new Logs(e.getMessage(), Instant.now());
             logsRepository.save(log);
             e.getStackTrace();
             System.out.println(e.getMessage());
@@ -168,8 +172,8 @@ public class Kraken {
 
 
 
-                OHLC ohlc = new OHLC(ldt, curr.get(1).getAsDouble(), curr.get(4).getAsDouble(), curr.get(2).getAsDouble(), curr.get(3).getAsDouble(), curr.get(6).getAsDouble());
-                if (!ohlcRepository.existsByDate(ldt)) {
+                OHLC ohlc = new OHLC(ldt.toInstant(ZoneOffset.UTC), curr.get(1).getAsDouble(), curr.get(4).getAsDouble(), curr.get(2).getAsDouble(), curr.get(3).getAsDouble(), curr.get(6).getAsDouble());
+                if (!ohlcRepository.existsByDate(ldt.toInstant(ZoneOffset.UTC))) {
                     ohlcRepository.save(ohlc);
                     addedOHLC.add(ohlc);
                 }
@@ -177,7 +181,7 @@ public class Kraken {
             }
         }
         catch (Exception e) {
-            Logs log = new Logs(e.getMessage(), LocalDateTime.now());
+            Logs log = new Logs(e.getMessage(), Instant.now());
             logsRepository.save(log);
             e.getStackTrace();
             System.out.println(e.getMessage());
@@ -203,17 +207,22 @@ public class Kraken {
         if (isOHLCEnabled()) {
             long start = System.currentTimeMillis();
             String pair="XBTUSD";
-            String interval="1";
+            String interval="60";
             List<OHLC> data = getOHLCData(pair,interval);
-            List<Double> allPrices = ohlcRepository.findAllOrderById();
+            List<Document> allPricesDocuments = ohlcRepository.findRecentOrders(200);
+            List<Double> allPrices = new ArrayList<>();
+            for (Document d : allPricesDocuments) {
+                allPrices.add(d.getDouble("close"));
+            }
+            allPrices.add(0, getCurrentPrice());
             Collections.reverse(allPrices);
             Double lastPrice=allPrices.get(allPrices.size()-1);
-            System.out.println("LAST PRICE: "+lastPrice);
+            System.out.println("CURRENT PRICE: "+lastPrice);
             List<Double> macd = MACD.macdLine(allPrices, 12, 26);
             System.out.println("MACD: "+macd.get(macd.size()-1)+" "+macd.get(macd.size()-2));
             List<Double> signal = MACD.signalLine(macd, 9);
             System.out.println("SIGNAL: "+signal.get(signal.size()-1)+" "+signal.get(signal.size()-2));
-            LocalDateTime currentDate = LocalDateTime.now();
+            Instant currentDate = Instant.now();
             if (data.size()==1) {
                 macdRepository.save(new MacdData(macd.get(macd.size()-1), currentDate));
                 signalRepository.save(new SignalData(signal.get(signal.size()-1), currentDate));
@@ -224,16 +233,16 @@ public class Kraken {
             Double prevSignal = signal.get(signal.size()-2);
 
             if (currentMacd<0 && currentSignal<0) {
-                if (currentMacd>currentSignal && prevMacd<prevSignal) {
+                if (currentMacd>currentSignal && prevMacd<prevSignal && orderLogRepository.countByOpenOrClosed(true)==0) {
                     System.out.println("BOUGHT LONG");
-                    OrderLog orderLog = new OrderLog(lastPrice, 1.0, LocalDateTime.now(), 'b', true, lastPrice-.5, lastPrice+.5);
+                    OrderLog orderLog = new OrderLog(lastPrice, 1.0, Instant.now(), 'b', true, lastPrice-(lastPrice*.005), lastPrice+(lastPrice*.01));
                     orderLogRepository.save(orderLog);
                 }
             }
             else if (currentMacd>0 && currentSignal>0) {
-                if (currentMacd<currentSignal && prevMacd>prevSignal) {
+                if (currentMacd<currentSignal && prevMacd>prevSignal && orderLogRepository.countByOpenOrClosed(true)==0) {
                     System.out.println("SOLD SHORT");
-                    OrderLog orderLog = new OrderLog(allPrices.get(allPrices.size()-1), 1.0, LocalDateTime.now(), 's', true, lastPrice+.5, lastPrice-.5);
+                    OrderLog orderLog = new OrderLog(allPrices.get(allPrices.size()-1), 1.0, Instant.now(), 's', true, lastPrice+(lastPrice*.01), lastPrice-(lastPrice*.005));
                     orderLogRepository.save(orderLog);
                 }
             }
@@ -241,13 +250,22 @@ public class Kraken {
             System.out.println("TIME(ms): "+(end-start));
             System.out.println("________________________________________________________");
 
-
-
-
-
         }
     }
 
+    public Double getCurrentPrice() throws URISyntaxException, IOException, InterruptedException {
+        String url = domain+"/0/public/Trades?pair=XBTUSD&count=1";
+        HttpRequest httpRequest = HttpRequest.newBuilder().uri(new URI(url))
+                .headers("User-Agent", "Kraken API Java Client")
+                .GET()
+                .build();
+        HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        JsonArray arr = (gson.fromJson(response.body(), JsonObject.class).getAsJsonObject())
+                .get("result").getAsJsonObject().get("XXBTZUSD").getAsJsonArray().get(0).getAsJsonArray();
+        return arr.get(0).getAsDouble();
+
+
+    }
 
     public HttpClient getHttpClient() {
         return httpClient;

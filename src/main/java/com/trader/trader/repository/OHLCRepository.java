@@ -1,27 +1,26 @@
 package com.trader.trader.repository;
 
 import com.trader.trader.models.OHLC;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.bson.Document;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Repository
-public interface OHLCRepository extends JpaRepository<OHLC, Long> {
-    @Query("SELECT COUNT(o) > 0 FROM OHLC o WHERE o.date = :date")
-    boolean existsByDate(@Param("date") LocalDateTime date);
+public interface OHLCRepository extends MongoRepository<OHLC, Long> {
+    boolean existsByDate(Instant date);
 
-    @Query("SELECT o.close FROM OHLC o ORDER BY o.id LIMIT :period")
-    List<Double> findAllOrderByDate(@Param("period") int longPeriod);
 
-    @Query("SELECT o.date FROM OHLC o ORDER BY o.date ASC LIMIT 1")
-    LocalDateTime findOldestDate();
+    @Query(value = "{}", sort = "{_id: -1}", fields = "{_id: 0, close: 1}")
+    List<Document> findRecentOrders(int longPeriod);
 
-    @Query("SELECT o.close FROM OHLC o ORDER BY o.id DESC")
-    List<Double> findAllOrderById();
+//    @Query(value = "{}", sort = "{date: 1}")
+//    Instant findTopByOrderByDateAsc();
+    @Query(value = "{}", sort = "{id: -1}")
+    List<Double> findAllByOrderByIdDesc();
 
 
 }

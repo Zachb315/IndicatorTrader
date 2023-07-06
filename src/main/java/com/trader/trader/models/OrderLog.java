@@ -1,28 +1,27 @@
 package com.trader.trader.models;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
-@Entity
+@Document(collection = "order_log")
 public class OrderLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
     private Double price;
     private Double amount;
     private Double stopLoss;
     private Double takeProfit;
 
-    private LocalDateTime date;
+    private Instant date;
     private Character buyOrSell;
+    @Field("open_or_closed")
     private Boolean openOrClosed;
 
-    public OrderLog(Double price, Double amount, LocalDateTime date, Character buyOrSell, Boolean openOrClosed,
+    public OrderLog(Double price, Double amount, Instant date, Character buyOrSell, Boolean openOrClosed,
                     Double stopLoss, Double takeProfit) {
         this.price = price;
         this.amount = amount;
@@ -34,6 +33,14 @@ public class OrderLog {
     }
 
     public OrderLog() {}
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
 
     public Double getPrice() {
         return price;
@@ -51,11 +58,11 @@ public class OrderLog {
         this.amount = amount;
     }
 
-    public LocalDateTime getDate() {
+    public Instant getDate() {
         return date;
     }
 
-    public void setDate(LocalDateTime date) {
+    public void setDate(Instant date) {
         this.date = date;
     }
 
