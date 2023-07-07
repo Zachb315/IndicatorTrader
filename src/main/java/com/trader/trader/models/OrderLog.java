@@ -34,6 +34,16 @@ public class OrderLog {
 
     public OrderLog() {}
 
+    public OrderLog(org.bson.Document curr) {
+        this.price=curr.getDouble("price");
+        this.amount=curr.getDouble("amount");
+        this.date=curr.getDate("date").toInstant();
+        this.buyOrSell=  curr.getString("buyOrSell").charAt(0);
+        this.openOrClosed=curr.getBoolean("open_or_closed");
+        this.stopLoss=curr.getDouble("stopLoss");
+        this.takeProfit=curr.getDouble("takeProfit");
+    }
+
     public String getId() {
         return id;
     }

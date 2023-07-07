@@ -233,14 +233,14 @@ public class Kraken {
             Double prevSignal = signal.get(signal.size()-2);
 
             if (currentMacd<0 && currentSignal<0) {
-                if (currentMacd>currentSignal && prevMacd<prevSignal && orderLogRepository.countByOpenOrClosed(true)==0) {
+                if (currentMacd>currentSignal && prevMacd<prevSignal && orderLogRepository.countByOpenOrClosed()==0) {
                     System.out.println("BOUGHT LONG");
                     OrderLog orderLog = new OrderLog(lastPrice, 1.0, Instant.now(), 'b', true, lastPrice-(lastPrice*.005), lastPrice+(lastPrice*.01));
                     orderLogRepository.save(orderLog);
                 }
             }
             else if (currentMacd>0 && currentSignal>0) {
-                if (currentMacd<currentSignal && prevMacd>prevSignal && orderLogRepository.countByOpenOrClosed(true)==0) {
+                if (currentMacd<currentSignal && prevMacd>prevSignal && orderLogRepository.countByOpenOrClosed()==0) {
                     System.out.println("SOLD SHORT");
                     OrderLog orderLog = new OrderLog(allPrices.get(allPrices.size()-1), 1.0, Instant.now(), 's', true, lastPrice+(lastPrice*.01), lastPrice-(lastPrice*.005));
                     orderLogRepository.save(orderLog);
